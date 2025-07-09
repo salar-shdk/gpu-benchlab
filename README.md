@@ -2,7 +2,7 @@
 
 BenchLab is a modular GPU benchmarking suite written in C++ using both **CUDA** and **HIP** backends. It provides comparative performance benchmarks for common GPU operations across NVIDIA and AMD GPUs.
 
-## ✨ Features
+## Features
 
 - Unified interface for **HIP** (AMD) and **CUDA** (NVIDIA)
 - Modular benchmarks:
@@ -11,14 +11,9 @@ BenchLab is a modular GPU benchmarking suite written in C++ using both **CUDA** 
   - 1D Convolution
   - Reduction (Sum)
   - Memory Bandwidth Test
-- Command-line build system
-- Extendable architecture for new benchmarks
-- Fast execution and clean output
-- Supports integration with plotting/GUI in the future
-
 ---
 
-## 🛠️ Build Instructions
+## Build Instructions
 
 ### Prerequisites
 
