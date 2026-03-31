@@ -1,6 +1,5 @@
 // benchmarks/matmul/matmul_cuda.cu
 #include <cuda_runtime.h>
-#include <chrono>
 #include <iostream>
 
 __global__ void matmul(const float* A, const float* B, float* C, int N) {
@@ -31,21 +30,28 @@ extern "C" float run_matmul_cuda() {
     cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
 
-    dim3 threads(16, 16);
-    dim3 blocks((N + threads.x - 1) / threads.x,
-                (N + threads.y - 1) / threads.y);
+    dim3 block(16, 16);
+    dim3 grid((N + block.x - 1) / block.x,
+              (N + block.y - 1) / block.y);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    matmul<<<blocks, threads>>>(d_A, d_B, d_C, N);
-    cudaDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
-    std::chrono::duration<float, std::milli> elapsed = end - start;
+    cudaEventRecord(start);
+    matmul<<<grid, block>>>(d_A, d_B, d_C, N);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, start, stop);
 
     cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
     delete[] h_A; delete[] h_B; delete[] h_C;
 
-    return elapsed.count(); // return time in ms
+    return ms;
 }
-

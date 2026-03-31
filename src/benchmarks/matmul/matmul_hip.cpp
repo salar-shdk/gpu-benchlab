@@ -1,6 +1,5 @@
 // benchmarks/matmul/matmul_hip.cpp
 #include <hip/hip_runtime.h>
-#include <chrono>
 #include <iostream>
 
 __global__ void matmul(const float* A, const float* B, float* C, int N) {
@@ -31,21 +30,28 @@ extern "C" float run_matmul_hip() {
     hipMemcpy(d_A, h_A, size, hipMemcpyHostToDevice);
     hipMemcpy(d_B, h_B, size, hipMemcpyHostToDevice);
 
-    dim3 threads(16, 16);
-    dim3 blocks((N + threads.x - 1) / threads.x,
-                (N + threads.y - 1) / threads.y);
+    dim3 block(16, 16);
+    dim3 grid((N + block.x - 1) / block.x,
+              (N + block.y - 1) / block.y);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    hipLaunchKernelGGL(matmul, blocks, threads, 0, 0, d_A, d_B, d_C, N);
-    hipDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
+    hipEvent_t start, stop;
+    hipEventCreate(&start);
+    hipEventCreate(&stop);
 
-    std::chrono::duration<float, std::milli> elapsed = end - start;
+    hipEventRecord(start);
+    hipLaunchKernelGGL(matmul, grid, block, 0, 0, d_A, d_B, d_C, N);
+    hipEventRecord(stop);
+    hipEventSynchronize(stop);
+
+    float ms = 0.0f;
+    hipEventElapsedTime(&ms, start, stop);
 
     hipMemcpy(h_C, d_C, size, hipMemcpyDeviceToHost);
+
+    hipEventDestroy(start);
+    hipEventDestroy(stop);
     hipFree(d_A); hipFree(d_B); hipFree(d_C);
     delete[] h_A; delete[] h_B; delete[] h_C;
 
-    return elapsed.count();
+    return ms;
 }
-

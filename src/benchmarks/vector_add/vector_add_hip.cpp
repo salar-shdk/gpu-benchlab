@@ -1,6 +1,5 @@
 #include <hip/hip_runtime.h>
 #include <iostream>
-#include <chrono>
 
 __global__ void vector_add(const float* A, const float* B, float* C, int N) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -26,21 +25,27 @@ extern "C" float run_vector_add_hip() {
     hipMemcpy(d_A, h_A, size, hipMemcpyHostToDevice);
     hipMemcpy(d_B, h_B, size, hipMemcpyHostToDevice);
 
-    dim3 threads(256);
-    dim3 blocks((N + threads.x - 1) / threads.x);
+    dim3 block(256);
+    dim3 grid((N + block.x - 1) / block.x);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    hipLaunchKernelGGL(vector_add, blocks, threads, 0, 0, d_A, d_B, d_C, N);
-    hipDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
+    hipEvent_t start, stop;
+    hipEventCreate(&start);
+    hipEventCreate(&stop);
+
+    hipEventRecord(start);
+    hipLaunchKernelGGL(vector_add, grid, block, 0, 0, d_A, d_B, d_C, N);
+    hipEventRecord(stop);
+    hipEventSynchronize(stop);
+
+    float ms = 0.0f;
+    hipEventElapsedTime(&ms, start, stop);
 
     hipMemcpy(h_C, d_C, size, hipMemcpyDeviceToHost);
 
-    std::chrono::duration<float, std::milli> duration = end - start;
-
+    hipEventDestroy(start);
+    hipEventDestroy(stop);
     hipFree(d_A); hipFree(d_B); hipFree(d_C);
     delete[] h_A; delete[] h_B; delete[] h_C;
 
-    return duration.count();
+    return ms;
 }
-

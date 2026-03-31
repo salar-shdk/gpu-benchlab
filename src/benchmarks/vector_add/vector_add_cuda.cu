@@ -1,6 +1,5 @@
 #include <cuda_runtime.h>
 #include <iostream>
-#include <chrono>
 
 __global__ void vector_add(const float* A, const float* B, float* C, int N) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -9,7 +8,7 @@ __global__ void vector_add(const float* A, const float* B, float* C, int N) {
 }
 
 extern "C" float run_vector_add_cuda() {
-    const int N = 1 << 20; // 1 million
+    const int N = 1 << 20;
     size_t size = N * sizeof(float);
 
     float *h_A = new float[N], *h_B = new float[N], *h_C = new float[N];
@@ -26,21 +25,27 @@ extern "C" float run_vector_add_cuda() {
     cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
 
-    dim3 threads(256);
-    dim3 blocks((N + threads.x - 1) / threads.x);
+    dim3 block(256);
+    dim3 grid((N + block.x - 1) / block.x);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    vector_add<<<blocks, threads>>>(d_A, d_B, d_C, N);
-    cudaDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+    vector_add<<<grid, block>>>(d_A, d_B, d_C, N);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, start, stop);
 
     cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
 
-    std::chrono::duration<float, std::milli> duration = end - start;
-
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
     delete[] h_A; delete[] h_B; delete[] h_C;
 
-    return duration.count();
+    return ms;
 }
-

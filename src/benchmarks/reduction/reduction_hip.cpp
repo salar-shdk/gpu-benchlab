@@ -1,9 +1,8 @@
 #include <hip/hip_runtime.h>
 #include <iostream>
-#include <chrono>
 
 __global__ void reduce_sum(const float* input, float* output, int N) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int tid    = threadIdx.x + blockIdx.x * blockDim.x;
     int stride = blockDim.x * gridDim.x;
 
     float sum = 0.0f;
@@ -24,28 +23,34 @@ extern "C" float run_reduction_hip() {
     float* d_output;
     float h_output = 0.0f;
 
-    hipMalloc(&d_input, size);
+    hipMalloc(&d_input,  size);
     hipMalloc(&d_output, sizeof(float));
-    hipMemcpy(d_input, h_input, size, hipMemcpyHostToDevice);
-    hipMemcpy(d_output, &h_output, sizeof(float), hipMemcpyHostToDevice);
+    hipMemcpy(d_input,  h_input,   size,          hipMemcpyHostToDevice);
+    hipMemcpy(d_output, &h_output, sizeof(float),  hipMemcpyHostToDevice);
 
-    dim3 threads(256);
-    dim3 blocks(256);
+    dim3 block(256);
+    dim3 grid(256);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    hipLaunchKernelGGL(reduce_sum, blocks, threads, 0, 0, d_input, d_output, N);
-    hipDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
+    hipEvent_t start, stop;
+    hipEventCreate(&start);
+    hipEventCreate(&stop);
+
+    hipEventRecord(start);
+    hipLaunchKernelGGL(reduce_sum, grid, block, 0, 0, d_input, d_output, N);
+    hipEventRecord(stop);
+    hipEventSynchronize(stop);
+
+    float ms = 0.0f;
+    hipEventElapsedTime(&ms, start, stop);
 
     hipMemcpy(&h_output, d_output, sizeof(float), hipMemcpyDeviceToHost);
-
-    std::chrono::duration<float, std::milli> duration = end - start;
     std::cout << "HIP Reduction Sum = " << h_output << "\n";
 
+    hipEventDestroy(start);
+    hipEventDestroy(stop);
     hipFree(d_input);
     hipFree(d_output);
     delete[] h_input;
 
-    return duration.count();
+    return ms;
 }
-
